@@ -17,6 +17,7 @@ export const OpportunityRadar: React.FC<OpportunityRadarProps> = ({
   onSelectSecurity,
 }) => {
   const [sectorFilter, setSectorFilter] = useState<string>('ALL');
+  const [uncertaintyFilter, setUncertaintyFilter] = useState<'ALL' | 'EXCLUDE_HIGH'>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedTicker, setSelectedTicker] = useState<string>(
     opportunities[0]?.ticker ?? ''
@@ -26,15 +27,33 @@ export const OpportunityRadar: React.FC<OpportunityRadarProps> = ({
 
   const filtered = opportunities.filter((o) => {
     const matchSector = sectorFilter === 'ALL' || o.sector === sectorFilter;
+    const matchUncertainty =
+      uncertaintyFilter === 'ALL' || o.uncertaintyLevel !== 'High';
     const matchQuery =
       searchQuery.trim() === '' ||
       o.ticker.toLowerCase().includes(searchQuery.toLowerCase()) ||
       o.name.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchSector && matchQuery;
+    return matchSector && matchUncertainty && matchQuery;
   });
 
   const activeItem =
     opportunities.find((o) => o.ticker === selectedTicker) ?? filtered[0] ?? opportunities[0];
+
+  const presets: Array<{ label: string; w: OpportunityWeights }> = [
+    { label: 'Balanced Proposal', w: DEFAULT_OPPORTUNITY_WEIGHTS },
+    {
+      label: 'Quality & Value',
+      w: { momentum: 0.1, fundamentals: 0.35, valuation: 0.3, risk: 0.15, liquidity: 0.1 },
+    },
+    {
+      label: 'Liquidity & Risk',
+      w: { momentum: 0.1, fundamentals: 0.2, valuation: 0.1, risk: 0.3, liquidity: 0.3 },
+    },
+    {
+      label: 'Momentum Tilt',
+      w: { momentum: 0.4, fundamentals: 0.2, valuation: 0.1, risk: 0.15, liquidity: 0.15 },
+    },
+  ];
 
   const weightEntries: Array<{ key: keyof OpportunityWeights; label: string }> = [
     { key: 'momentum', label: 'Market Momentum' },
@@ -64,13 +83,24 @@ export const OpportunityRadar: React.FC<OpportunityRadarProps> = ({
               Weights are normalized dynamically to 100% and represent configurable research hypotheses—not automated BUY/SELL instructions.
             </p>
           </div>
-          <button
-            onClick={() => onChangeWeights(DEFAULT_OPPORTUNITY_WEIGHTS)}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors whitespace-nowrap"
-          >
-            <RotateCcw className="h-3.5 w-3.5" />
-            <span>Reset Proposal (20/25/20/20/15)</span>
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            {presets.map((p) => (
+              <button
+                key={p.label}
+                onClick={() => onChangeWeights(p.w)}
+                className="px-2.5 py-1.5 text-xs border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors whitespace-nowrap"
+              >
+                {p.label}
+              </button>
+            ))}
+            <button
+              onClick={() => onChangeWeights(DEFAULT_OPPORTUNITY_WEIGHTS)}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors whitespace-nowrap"
+            >
+              <RotateCcw className="h-3.5 w-3.5" />
+              <span>Reset</span>
+            </button>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-5">
@@ -122,12 +152,22 @@ export const OpportunityRadar: React.FC<OpportunityRadarProps> = ({
                   </option>
                 ))}
               </select>
+              <select
+                value={uncertaintyFilter}
+                onChange={(e) =>
+                  setUncertaintyFilter(e.target.value as 'ALL' | 'EXCLUDE_HIGH')
+                }
+                className="px-3 py-1.5 text-xs border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-200"
+              >
+                <option value="ALL">All Uncertainty Levels</option>
+                <option value="EXCLUDE_HIGH">Exclude High Uncertainty</option>
+              </select>
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Filter ticker or company..."
-                className="px-3 py-1.5 text-xs border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-200 w-48"
+                className="px-3 py-1.5 text-xs border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-800 dark:text-slate-200 w-44"
               />
             </div>
             <span className="text-xs font-mono tabular-nums text-slate-500">

@@ -2,5 +2,7 @@
   "name": "ROCK ATLAS",
   "description": "African Market Intelligence & Investment Decision-Support Platform for the Nairobi Securities Exchange (NSE).",
   "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
 }

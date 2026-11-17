@@ -1,4 +1,5 @@
 import express from 'express';
+import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
@@ -11,10 +12,27 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const PORT = 3000;
+const REPORTS_FILE = path.resolve(__dirname, 'reports', 'saved_reports.json');
+const DATASETS_FILE = path.resolve(__dirname, 'data', 'processed', 'saved_datasets.json');
+
+async function readJsonStore<T>(filePath: string): Promise<T[]> {
+  try {
+    const raw = await fs.readFile(filePath, 'utf-8');
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? (parsed as T[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+async function writeJsonStore<T>(filePath: string, data: T[]): Promise<void> {
+  await fs.mkdir(path.dirname(filePath), { recursive: true });
+  await fs.writeFile(filePath, JSON.stringify(data, null, 2), 'utf-8');
+}
 
 async function startServer() {
   const app = express();
-  app.use(express.json({ limit: '2mb' }));
+  app.use(express.json({ limit: '10mb' }));
 
   app.get('/api/health', (_req, res) => {
     res.json({
@@ -22,6 +40,73 @@ async function startServer() {
       service: 'rock-atlas-intelligence-server',
       timestamp: new Date().toISOString(),
     });
+  });
+
+  // Persistent Research Reports Archive
+  app.get('/api/reports', async (_req, res) => {
+    const reports = await readJsonStore(REPORTS_FILE);
+    res.json({ reports });
+  });
+
+  app.post('/api/reports', async (req, res) => {
+    const { title, authorMode, datasetName, classification, markdown } = req.body ?? {};
+    if (!title || !markdown) {
+      return res.status(400).json({ error: 'Report title and markdown content are required.' });
+    }
+    const reports = await readJsonStore<Record<string, unknown>>(REPORTS_FILE);
+    const record = {
+      id: `rpt-${Date.now()}`,
+      title: String(title),
+      authorMode: authorMode === 'AI-Assisted (Gemini)' ? 'AI-Assisted (Gemini)' : 'Deterministic',
+      datasetName: String(datasetName || 'Unknown Dataset'),
+      classification: String(classification || 'SYNTHETIC DATA'),
+      createdAt: new Date().toISOString(),
+      markdown: String(markdown),
+    };
+    const updated = [record, ...reports].slice(0, 30);
+    await writeJsonStore(REPORTS_FILE, updated);
+    res.status(201).json({ report: record, reports: updated });
+  });
+
+  app.delete('/api/reports/:id', async (req, res) => {
+    const reports = await readJsonStore<{ id: string }>(REPORTS_FILE);
+    const updated = reports.filter((r) => r.id !== req.params.id);
+    await writeJsonStore(REPORTS_FILE, updated);
+    res.json({ reports: updated });
+  });
+
+  // Persistent Datasets Registry
+  app.get('/api/datasets', async (_req, res) => {
+    const datasets = await readJsonStore(DATASETS_FILE);
+    res.json({ datasets });
+  });
+
+  app.post('/api/datasets', async (req, res) => {
+    const { name, source, classification, securityCount, tradingDays, csvText } = req.body ?? {};
+    if (!name || !csvText) {
+      return res.status(400).json({ error: 'Dataset name and csvText are required.' });
+    }
+    const datasets = await readJsonStore<{ id: string; name: string }>(DATASETS_FILE);
+    const record = {
+      id: `ds-${Date.now()}`,
+      name: String(name),
+      source: String(source || 'Uploaded CSV'),
+      classification: String(classification || 'VERIFIED DATA'),
+      savedAt: new Date().toISOString(),
+      securityCount: Number(securityCount || 0),
+      tradingDays: Number(tradingDays || 0),
+      csvText: String(csvText),
+    };
+    const updated = [record, ...datasets.filter((d) => d.name !== record.name)].slice(0, 10);
+    await writeJsonStore(DATASETS_FILE, updated);
+    res.status(201).json({ dataset: record, datasets: updated });
+  });
+
+  app.delete('/api/datasets/:id', async (req, res) => {
+    const datasets = await readJsonStore<{ id: string }>(DATASETS_FILE);
+    const updated = datasets.filter((d) => d.id !== req.params.id);
+    await writeJsonStore(DATASETS_FILE, updated);
+    res.json({ datasets: updated });
   });
 
   app.post('/api/research/brief', async (req, res) => {

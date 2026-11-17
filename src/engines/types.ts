@@ -208,6 +208,11 @@ export interface PortfolioRiskAnalysis {
   diversificationRatio: number;
   herfindahlIndex: number;
   concentrationLabel: 'Diversified' | 'Moderate Concentration' | 'High Concentration';
+  equitySeries: Array<{
+    date: string;
+    portfolio: number;
+    benchmark: number;
+  }>;
   stressTests: Array<{
     scenario: string;
     assumption: string;
@@ -215,6 +220,27 @@ export interface PortfolioRiskAnalysis {
     portfolioStressedReturn: number;
     notes: string;
   }>;
+}
+
+export interface SavedReportRecord {
+  id: string;
+  title: string;
+  authorMode: 'Deterministic' | 'AI-Assisted (Gemini)';
+  datasetName: string;
+  classification: DataClassification;
+  createdAt: string;
+  markdown: string;
+}
+
+export interface SavedDatasetRecord {
+  id: string;
+  name: string;
+  source: string;
+  classification: DataClassification;
+  savedAt: string;
+  securityCount: number;
+  tradingDays: number;
+  csvText: string;
 }
 
 // Engine 03: Predictive Intelligence

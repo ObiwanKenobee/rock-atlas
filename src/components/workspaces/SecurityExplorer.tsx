@@ -25,6 +25,8 @@ export const SecurityExplorer: React.FC<SecurityExplorerProps> = ({
   selectedTicker,
   onSelectTicker,
 }) => {
+  const [compareTicker, setCompareTicker] = React.useState<string>('NONE');
+
   const sec =
     dataset.securities.find((s) => s.ticker === selectedTicker) ?? dataset.securities[0];
 
@@ -36,15 +38,36 @@ export const SecurityExplorer: React.FC<SecurityExplorerProps> = ({
     );
   }
 
+  const peerSec =
+    compareTicker !== 'NONE' && compareTicker !== sec.ticker
+      ? dataset.securities.find((s) => s.ticker === compareTicker) ?? null
+      : null;
+
   const mkt = market.securities.find((m) => m.ticker === sec.ticker);
   const fund = fundamentals.find((f) => f.ticker === sec.ticker);
   const risk = riskProfiles.find((r) => r.ticker === sec.ticker);
+  const peerRisk = peerSec ? riskProfiles.find((r) => r.ticker === peerSec.ticker) : null;
+  const peerFund = peerSec ? fundamentals.find((f) => f.ticker === peerSec.ticker) : null;
 
   const dates = sec.bars.map((b) => b.date);
   const closes = sec.bars.map((b) => b.close);
   const volumes = sec.bars.map((b) => b.volume);
   const sma20 = sma(closes, 20);
   const sma50 = sma(closes, 50);
+
+  // Normalized Base-100 comparison series when peer is selected
+  const peerPriceByDate = peerSec
+    ? new Map(peerSec.bars.map((b) => [b.date, b.close]))
+    : null;
+  const secBase = closes[0] || 1;
+  const peerBase = peerSec?.bars[0]?.close || 1;
+  const normSecSeries = closes.map((c) => Number(((c / secBase) * 100).toFixed(2)));
+  const normPeerSeries = peerPriceByDate
+    ? dates.map((d) => {
+        const val = peerPriceByDate.get(d);
+        return val !== undefined ? Number(((val / peerBase) * 100).toFixed(2)) : null;
+      })
+    : [];
 
   const formatMetric = (
     val: number | null | undefined,
@@ -108,21 +131,42 @@ export const SecurityExplorer: React.FC<SecurityExplorerProps> = ({
           </h2>
         </div>
 
-        <div className="flex items-center gap-3">
-          <label className="text-xs font-medium text-slate-600 dark:text-slate-400">
-            Select Security:
-          </label>
-          <select
-            value={sec.ticker}
-            onChange={(e) => onSelectTicker(e.target.value)}
-            className="px-3 py-1.5 text-xs font-mono border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100"
-          >
-            {dataset.securities.map((s) => (
-              <option key={s.ticker} value={s.ticker}>
-                {s.ticker} — {s.name}
-              </option>
-            ))}
-          </select>
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2">
+            <label className="text-xs font-medium text-slate-600 dark:text-slate-400">
+              Primary:
+            </label>
+            <select
+              value={sec.ticker}
+              onChange={(e) => onSelectTicker(e.target.value)}
+              className="px-3 py-1.5 text-xs font-mono border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100"
+            >
+              {dataset.securities.map((s) => (
+                <option key={s.ticker} value={s.ticker}>
+                  {s.ticker} — {s.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="flex items-center gap-2">
+            <label className="text-xs font-medium text-slate-600 dark:text-slate-400">
+              Compare Peer:
+            </label>
+            <select
+              value={compareTicker}
+              onChange={(e) => setCompareTicker(e.target.value)}
+              className="px-3 py-1.5 text-xs font-mono border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100"
+            >
+              <option value="NONE">None (Single Security)</option>
+              {dataset.securities
+                .filter((s) => s.ticker !== sec.ticker)
+                .map((s) => (
+                  <option key={s.ticker} value={s.ticker}>
+                    {s.ticker} — {s.sector}
+                  </option>
+                ))}
+            </select>
+          </div>
         </div>
       </div>
 
@@ -165,6 +209,36 @@ export const SecurityExplorer: React.FC<SecurityExplorerProps> = ({
           </div>
         </div>
       </div>
+
+      {peerSec && peerRisk && (
+        <div className="border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 space-y-4">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
+            <div>
+              <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                Comparative Relative Performance: {sec.ticker} vs {peerSec.ticker} (Indexed Base = 100)
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                Normalizes both price series to 100 at {dates[0]} for direct relative return and drawdown inspection.
+              </p>
+            </div>
+            <div className="text-xs font-mono tabular-nums text-slate-600 dark:text-slate-300">
+              {sec.ticker}: Vol {(risk ? risk.annualizedVolatility * 100 : 0).toFixed(1)}%, P/E{' '}
+              {fund?.metrics.peRatio ?? 'N/A'}x · {peerSec.ticker}: Vol{' '}
+              {(peerRisk.annualizedVolatility * 100).toFixed(1)}%, P/E{' '}
+              {peerFund?.metrics.peRatio ?? 'N/A'}x
+            </div>
+          </div>
+          <MultiLineChart
+            dates={dates}
+            series={[
+              { id: 'prim', label: `${sec.ticker} (Base 100)`, color: '#0F766E', values: normSecSeries },
+              { id: 'peer', label: `${peerSec.ticker} (Base 100)`, color: '#D97706', dashed: true, values: normPeerSeries },
+            ]}
+            valueFormatter={(v) => v.toFixed(1)}
+            yAxisLabel="Base = 100.0"
+          />
+        </div>
+      )}
 
       {/* Charts + Fundamentals */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">

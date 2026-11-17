@@ -5,6 +5,7 @@ import {
   SecurityRiskProfile,
 } from '../../engines/types';
 import { analyzePortfolioRisk } from '../../engines/riskEngine';
+import { MultiLineChart } from '../Charts';
 
 interface RiskLaboratoryProps {
   dataset: ParsedDataset;
@@ -236,6 +237,48 @@ export const RiskLaboratory: React.FC<RiskLaboratoryProps> = ({
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Live Simulated Portfolio Equity Curve */}
+      <div className="border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6">
+        <div className="flex flex-wrap items-baseline justify-between gap-2 mb-3">
+          <div>
+            <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+              Live Simulated Portfolio Equity Curve vs Equal-Weight Benchmark
+            </h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              Updates dynamically as weight sliders change · Diversification Ratio:{' '}
+              <span className="font-mono font-semibold text-slate-800 dark:text-slate-200">
+                {portfolio.diversificationRatio.toFixed(2)}x
+              </span>{' '}
+              · Sharpe:{' '}
+              <span className="font-mono font-semibold text-slate-800 dark:text-slate-200">
+                {portfolio.portfolioSharpe.toFixed(2)}
+              </span>
+            </p>
+          </div>
+          <span className="text-xs font-mono text-slate-500">Base = 100.0 (Ex-Costs)</span>
+        </div>
+        <MultiLineChart
+          dates={portfolio.equitySeries.map((e) => e.date)}
+          series={[
+            {
+              id: 'port',
+              label: 'Simulated Portfolio',
+              color: '#0F766E',
+              values: portfolio.equitySeries.map((e) => e.portfolio),
+            },
+            {
+              id: 'eqb',
+              label: 'Equal-Weight Universe',
+              color: '#475569',
+              dashed: true,
+              values: portfolio.equitySeries.map((e) => e.benchmark),
+            },
+          ]}
+          valueFormatter={(v) => v.toFixed(1)}
+          yAxisLabel="Base = 100.0"
+        />
       </div>
 
       {/* Return Correlation Matrix */}

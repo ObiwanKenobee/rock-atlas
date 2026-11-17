@@ -1,10 +1,11 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   BacktestResult,
   DatasetMetadata,
   KMRIAnalysis,
   MarketOverview,
   OpportunityScore,
+  SavedReportRecord,
   SecurityRiskProfile,
   ValidationReport,
 } from '../../engines/types';
@@ -12,7 +13,7 @@ import {
   buildDeterministicResearchBrief,
   RESEARCH_PAPER_SECTIONS,
 } from '../../engines/researchContent';
-import { Download, Sparkles } from 'lucide-react';
+import { Download, Save, Sparkles, Trash2 } from 'lucide-react';
 
 interface ResearchStudioProps {
   metadata: DatasetMetadata;
@@ -51,7 +52,70 @@ export const ResearchStudio: React.FC<ResearchStudioProps> = ({
   const [aiBrief, setAiBrief] = useState<string | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'brief' | 'paper'>('brief');
+  const [activeTab, setActiveTab] = useState<'brief' | 'archive' | 'paper'>('brief');
+  const [savedReports, setSavedReports] = useState<SavedReportRecord[]>([]);
+  const [selectedReport, setSelectedReport] = useState<SavedReportRecord | null>(null);
+  const [saveNotice, setSaveNotice] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch('/api/reports')
+      .then((r) => (r.ok ? r.json() : { reports: [] }))
+      .then((data) => {
+        if (Array.isArray(data.reports)) {
+          setSavedReports(data.reports);
+          if (data.reports.length > 0 && !selectedReport) {
+            setSelectedReport(data.reports[0]);
+          }
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const handleSaveReport = async (
+    title: string,
+    authorMode: 'Deterministic' | 'AI-Assisted (Gemini)',
+    markdown: string
+  ) => {
+    setSaveNotice(null);
+    try {
+      const res = await fetch('/api/reports', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          title,
+          authorMode,
+          datasetName: metadata.name,
+          classification: metadata.classification,
+          markdown,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok && Array.isArray(data.reports)) {
+        setSavedReports(data.reports);
+        setSelectedReport(data.report);
+        setSaveNotice(`Saved "${title}" to Research Archive.`);
+      } else {
+        setSaveNotice(data.error || 'Unable to save report.');
+      }
+    } catch {
+      setSaveNotice('Network error saving report.');
+    }
+  };
+
+  const handleDeleteReport = async (id: string) => {
+    try {
+      const res = await fetch(`/api/reports/${encodeURIComponent(id)}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (res.ok && Array.isArray(data.reports)) {
+        setSavedReports(data.reports);
+        if (selectedReport?.id === id) {
+          setSelectedReport(data.reports[0] ?? null);
+        }
+      }
+    } catch {
+      // ignore
+    }
+  };
 
   const handleGenerateAiBrief = async () => {
     setAiLoading(true);
@@ -163,6 +227,16 @@ export const ResearchStudio: React.FC<ResearchStudioProps> = ({
             Research Brief Generator
           </button>
           <button
+            onClick={() => setActiveTab('archive')}
+            className={`px-3 py-1.5 text-xs font-medium transition-colors whitespace-nowrap ${
+              activeTab === 'archive'
+                ? 'bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 shadow-xs'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+            }`}
+          >
+            Saved Archive ({savedReports.length})
+          </button>
+          <button
             onClick={() => setActiveTab('paper')}
             className={`px-3 py-1.5 text-xs font-medium transition-colors whitespace-nowrap ${
               activeTab === 'paper'
@@ -175,11 +249,17 @@ export const ResearchStudio: React.FC<ResearchStudioProps> = ({
         </div>
       </div>
 
-      {activeTab === 'brief' ? (
+      {saveNotice && (
+        <div className="px-4 py-2.5 border border-teal-300 dark:border-teal-800 bg-teal-50/70 dark:bg-teal-950/30 text-xs text-teal-900 dark:text-teal-200">
+          {saveNotice}
+        </div>
+      )}
+
+      {activeTab === 'brief' && (
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
           {/* Deterministic Brief (Always Available, Reproducible) */}
           <div className="lg:col-span-6 border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6 space-y-4">
-            <div className="flex items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
                   Deterministic Evidence-Linked Brief
@@ -188,18 +268,33 @@ export const ResearchStudio: React.FC<ResearchStudioProps> = ({
                   100% computed directly from Engines 01–05 & KMRI
                 </div>
               </div>
-              <button
-                onClick={() =>
-                  downloadMarkdown(
-                    deterministicBrief,
-                    `rock-atlas-brief-${metadata.endDate || 'draft'}.md`
-                  )
-                }
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 whitespace-nowrap"
-              >
-                <Download className="h-3.5 w-3.5" />
-                <span>Export Markdown</span>
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() =>
+                    handleSaveReport(
+                      `Deterministic Brief — ${metadata.endDate || 'Current'}`,
+                      'Deterministic',
+                      deterministicBrief
+                    )
+                  }
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 whitespace-nowrap"
+                >
+                  <Save className="h-3.5 w-3.5" />
+                  <span>Save</span>
+                </button>
+                <button
+                  onClick={() =>
+                    downloadMarkdown(
+                      deterministicBrief,
+                      `rock-atlas-brief-${metadata.endDate || 'draft'}.md`
+                    )
+                  }
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 whitespace-nowrap"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  <span>Export Markdown</span>
+                </button>
+              </div>
             </div>
 
             <pre className="p-4 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-xs font-mono leading-relaxed text-slate-800 dark:text-slate-200 whitespace-pre-wrap max-h-[560px] overflow-y-auto">
@@ -244,7 +339,20 @@ export const ResearchStudio: React.FC<ResearchStudioProps> = ({
 
             {aiBrief ? (
               <div className="space-y-3">
-                <div className="flex justify-end">
+                <div className="flex justify-end gap-2">
+                  <button
+                    onClick={() =>
+                      handleSaveReport(
+                        focusTopic || 'AI Research Brief',
+                        'AI-Assisted (Gemini)',
+                        aiBrief
+                      )
+                    }
+                    className="flex items-center gap-1.5 px-3 py-1 text-xs border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
+                  >
+                    <Save className="h-3.5 w-3.5" />
+                    <span>Save to Archive</span>
+                  </button>
                   <button
                     onClick={() => downloadMarkdown(aiBrief, 'rock-atlas-ai-brief.md')}
                     className="flex items-center gap-1.5 px-3 py-1 text-xs border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800"
@@ -264,7 +372,89 @@ export const ResearchStudio: React.FC<ResearchStudioProps> = ({
             )}
           </div>
         </div>
-      ) : (
+      )}
+
+      {activeTab === 'archive' && (
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+          <div className="lg:col-span-5 border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6">
+            <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-3">
+              Saved Research Briefs Repository
+            </h3>
+            {savedReports.length === 0 ? (
+              <p className="text-xs text-slate-500 py-6">
+                No saved reports yet. Generate and save a Deterministic or AI-Assisted brief from the Research Brief Generator tab.
+              </p>
+            ) : (
+              <div className="divide-y divide-slate-100 dark:divide-slate-800 text-xs">
+                {savedReports.map((rpt) => (
+                  <div
+                    key={rpt.id}
+                    className={`py-3 flex items-start justify-between gap-2 cursor-pointer px-2 -mx-2 ${
+                      selectedReport?.id === rpt.id ? 'bg-teal-50/70 dark:bg-teal-950/30' : ''
+                    }`}
+                    onClick={() => setSelectedReport(rpt)}
+                  >
+                    <div>
+                      <div className="font-semibold text-slate-900 dark:text-slate-100">
+                        {rpt.title}
+                      </div>
+                      <div className="text-[11px] text-slate-500 mt-0.5">
+                        {rpt.authorMode} · {rpt.classification} · {rpt.createdAt.slice(0, 10)}
+                      </div>
+                    </div>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDeleteReport(rpt.id);
+                      }}
+                      aria-label="Delete saved report"
+                      className="p-1 text-slate-400 hover:text-red-600"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="lg:col-span-7 border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6">
+            {selectedReport ? (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+                      {selectedReport.title}
+                    </h3>
+                    <div className="text-xs text-slate-500">
+                      {selectedReport.datasetName} · {selectedReport.classification} · Saved{' '}
+                      {new Date(selectedReport.createdAt).toLocaleString()}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() =>
+                      downloadMarkdown(selectedReport.markdown, `${selectedReport.id}.md`)
+                    }
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs border border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800"
+                  >
+                    <Download className="h-3.5 w-3.5" />
+                    <span>Download</span>
+                  </button>
+                </div>
+                <pre className="p-4 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-xs font-mono leading-relaxed text-slate-800 dark:text-slate-200 whitespace-pre-wrap max-h-[540px] overflow-y-auto">
+                  {selectedReport.markdown}
+                </pre>
+              </div>
+            ) : (
+              <div className="text-xs text-slate-500 py-10 text-center">
+                Select a saved report on the left to inspect or export.
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'paper' && (
         <div className="border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6">
           <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-1">
             Structured Research Paper Outline (22 Sections)

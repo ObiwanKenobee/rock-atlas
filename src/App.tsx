@@ -126,6 +126,19 @@ export default function App() {
       setSelectedTicker(parsed.securities[0]?.ticker ?? '');
       setUploadError(null);
       setActiveWorkspace('governance');
+
+      fetch('/api/datasets', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: fileName,
+          source: sourceLabel,
+          classification,
+          securityCount: parsed.metadata.securityCount,
+          tradingDays: parsed.metadata.tradingDays,
+          csvText,
+        }),
+      }).catch(() => {});
     } catch (err: unknown) {
       setUploadError(err instanceof Error ? err.message : 'Unable to parse CSV file.');
       setActiveWorkspace('governance');
@@ -446,6 +459,7 @@ export default function App() {
 
           {activeWorkspace === 'governance' && (
             <GovernanceWorkspace
+              dataset={dataset}
               metadata={dataset.metadata}
               validation={dataset.validation}
               onUploadCsv={handleUploadCsv}
@@ -458,6 +472,13 @@ export default function App() {
             />
           )}
         </main>
+
+        <footer className="px-6 py-4 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-[11px] text-slate-500 dark:text-slate-400 flex flex-wrap items-center justify-between gap-3">
+          <span>
+            ROCK ATLAS — Experimental African financial research and decision-support platform. Does not constitute personalized investment advice or a guarantee of future performance.
+          </span>
+          <span className="font-mono">Research. Discover. Evaluate. Explain.</span>
+        </footer>
       </div>
     </div>
   );

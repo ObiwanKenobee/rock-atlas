@@ -876,3 +876,41 @@ export function generateCsvTemplate(): string {
     '2025-01-03,SCOM,Safaricom PLC,Telecommunication,17.45,17.65,17.30,17.60,7920000,139392000,83635200,10.4,3.1,0.071,0.285',
   ].join('\n');
 }
+
+export function exportDatasetToCsv(dataset: ParsedDataset): string {
+  const header =
+    'date,ticker,name,sector,open,high,low,close,volume,turnover,foreign_turnover,market_cap,revenue_growth,net_margin,roe,debt_to_equity,pe_ratio,pb_ratio,dividend_yield';
+  const rows: string[] = [header];
+  const csvEscape = (v: string) =>
+    v.includes(',') || v.includes('"') ? `"${v.replace(/"/g, '""')}"` : v;
+
+  for (const sec of dataset.securities) {
+    const f = sec.fundamentals;
+    for (const b of sec.bars) {
+      rows.push(
+        [
+          b.date,
+          b.ticker,
+          csvEscape(b.name),
+          csvEscape(b.sector),
+          b.open,
+          b.high,
+          b.low,
+          b.close,
+          b.volume,
+          b.turnover,
+          b.foreignTurnover ?? '',
+          f?.marketCapKes ?? '',
+          f?.revenueGrowthYoY ?? '',
+          f?.netMargin ?? '',
+          f?.roe ?? '',
+          f?.debtToEquity ?? '',
+          f?.peRatio ?? '',
+          f?.pbRatio ?? '',
+          f?.dividendYield ?? '',
+        ].join(',')
+      );
+    }
+  }
+  return rows.join('\n');
+}

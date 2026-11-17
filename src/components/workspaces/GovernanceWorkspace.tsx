@@ -1,22 +1,31 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   DataClassification,
   DatasetMetadata,
+  ParsedDataset,
+  SavedDatasetRecord,
   ValidationReport,
 } from '../../engines/types';
-import { generateCsvTemplate } from '../../engines/dataGovernance';
+import { exportDatasetToCsv, generateCsvTemplate } from '../../engines/dataGovernance';
 import { PROJECT_STATUS_LEDGER } from '../../engines/researchContent';
-import { Download, RotateCcw, Upload } from 'lucide-react';
+import { Download, RotateCcw, Trash2, Upload } from 'lucide-react';
 
 interface GovernanceWorkspaceProps {
+  dataset: ParsedDataset;
   metadata: DatasetMetadata;
   validation: ValidationReport;
-  onUploadCsv: (csvText: string, fileName: string, sourceLabel: string, classification: DataClassification) => void;
+  onUploadCsv: (
+    csvText: string,
+    fileName: string,
+    sourceLabel: string,
+    classification: DataClassification
+  ) => void;
   onResetSynthetic: () => void;
   uploadError: string | null;
 }
 
 export const GovernanceWorkspace: React.FC<GovernanceWorkspaceProps> = ({
+  dataset,
   metadata,
   validation,
   onUploadCsv,
@@ -26,6 +35,20 @@ export const GovernanceWorkspace: React.FC<GovernanceWorkspaceProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [sourceLabel, setSourceLabel] = useState('Rock Data Plus NSE Export');
   const [uploadClass, setUploadClass] = useState<DataClassification>('VERIFIED DATA');
+  const [savedDatasets, setSavedDatasets] = useState<SavedDatasetRecord[]>([]);
+
+  const refreshSavedDatasets = () => {
+    fetch('/api/datasets')
+      .then((r) => (r.ok ? r.json() : { datasets: [] }))
+      .then((d) => {
+        if (Array.isArray(d.datasets)) setSavedDatasets(d.datasets);
+      })
+      .catch(() => {});
+  };
+
+  useEffect(() => {
+    refreshSavedDatasets();
+  }, [dataset.metadata.datasetId]);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -49,6 +72,29 @@ export const GovernanceWorkspace: React.FC<GovernanceWorkspaceProps> = ({
     URL.revokeObjectURL(url);
   };
 
+  const handleExportActiveCsv = () => {
+    const csv = exportDatasetToCsv(dataset);
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${metadata.datasetId}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleDeleteSavedDataset = async (id: string) => {
+    try {
+      const res = await fetch(`/api/datasets/${encodeURIComponent(id)}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (res.ok && Array.isArray(data.datasets)) {
+        setSavedDatasets(data.datasets);
+      }
+    } catch {
+      // ignore
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Dataset Ingestion & Provenance Switcher */}
@@ -59,7 +105,7 @@ export const GovernanceWorkspace: React.FC<GovernanceWorkspaceProps> = ({
               Data Ingestion & Provenance Governance
             </h2>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              Import verified Rock Data Plus or NSE CSV datasets directly into all six analytical engines, or inspect the synthetic demonstration corpus.
+              Import verified Rock Data Plus or NSE CSV datasets directly into all six analytical engines, or export the active corpus.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -69,6 +115,13 @@ export const GovernanceWorkspace: React.FC<GovernanceWorkspaceProps> = ({
             >
               <Download className="h-3.5 w-3.5" />
               <span>CSV Template</span>
+            </button>
+            <button
+              onClick={handleExportActiveCsv}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 whitespace-nowrap"
+            >
+              <Download className="h-3.5 w-3.5" />
+              <span>Export Active CSV</span>
             </button>
             <button
               onClick={onResetSynthetic}
@@ -123,6 +176,43 @@ export const GovernanceWorkspace: React.FC<GovernanceWorkspaceProps> = ({
         {uploadError && (
           <div className="mt-3 p-3 border border-red-300 dark:border-red-800 bg-red-50 dark:bg-red-950/30 text-xs text-red-800 dark:text-red-300">
             CSV Ingestion Error: {uploadError}
+          </div>
+        )}
+
+        {savedDatasets.length > 0 && (
+          <div className="mt-5 border-t border-slate-200 dark:border-slate-800 pt-4">
+            <div className="text-xs font-semibold text-slate-800 dark:text-slate-200 mb-2">
+              Persisted Uploaded Datasets ({savedDatasets.length})
+            </div>
+            <div className="divide-y divide-slate-100 dark:divide-slate-800 text-xs">
+              {savedDatasets.map((sd) => (
+                <div key={sd.id} className="py-2 flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <span className="font-medium text-slate-900 dark:text-slate-100">{sd.name}</span>
+                    <span className="text-slate-500 ml-2 font-mono">
+                      {sd.classification} · {sd.securityCount} securities · {sd.tradingDays} days
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() =>
+                        onUploadCsv(sd.csvText, sd.name, sd.source, sd.classification)
+                      }
+                      className="px-2.5 py-1 border border-slate-300 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs"
+                    >
+                      Activate
+                    </button>
+                    <button
+                      onClick={() => handleDeleteSavedDataset(sd.id)}
+                      aria-label="Delete saved dataset"
+                      className="p-1 text-slate-400 hover:text-red-600"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>

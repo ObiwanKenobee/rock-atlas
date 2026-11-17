@@ -8,10 +8,14 @@ import {
   sma,
   spearmanRankCorrelation,
 } from '../src/engines/mathUtils.ts';
-import { createSyntheticNseDataset, parseCsvDataset } from '../src/engines/dataGovernance.ts';
+import {
+  createSyntheticNseDataset,
+  exportDatasetToCsv,
+  parseCsvDataset,
+} from '../src/engines/dataGovernance.ts';
 import { computeMarketIntelligence } from '../src/engines/marketEngine.ts';
 import { computeFundamentalIntelligence } from '../src/engines/fundamentalEngine.ts';
-import { computeRiskIntelligence } from '../src/engines/riskEngine.ts';
+import { analyzePortfolioRisk, computeRiskIntelligence } from '../src/engines/riskEngine.ts';
 import { computeOpportunityRadar } from '../src/engines/opportunityEngine.ts';
 import { computeKMRI } from '../src/engines/kmriEngine.ts';
 import { computePredictiveIntelligence } from '../src/engines/predictiveEngine.ts';
@@ -104,4 +108,18 @@ test('CSV parser rejects invalid headers and validates clean NSE CSV input', () 
   assert.equal(parsed.metadata.classification, 'VERIFIED DATA');
   assert.equal(parsed.securities.length, 1);
   assert.equal(parsed.validation.overallStatus, 'VALIDATED');
+});
+
+test('exportDatasetToCsv round-trips and portfolio analysis produces aligned equitySeries', () => {
+  const ds = createSyntheticNseDataset();
+  const csv = exportDatasetToCsv(ds);
+  const reimported = parseCsvDataset(csv, 'roundtrip.csv', 'Roundtrip Test', 'SYNTHETIC DATA');
+  assert.equal(reimported.securities.length, ds.securities.length);
+  assert.equal(reimported.metadata.tradingDays, ds.metadata.tradingDays);
+
+  const risk = computeRiskIntelligence(ds, 0.145);
+  const weights = Object.fromEntries(risk.profiles.map((p) => [p.ticker, 10]));
+  const port = analyzePortfolioRisk(ds, risk.profiles, weights, 0.145);
+  assert.equal(port.equitySeries.length, ds.metadata.tradingDays - 1);
+  assert.ok(port.herfindahlIndex > 0 && port.herfindahlIndex <= 1);
 });

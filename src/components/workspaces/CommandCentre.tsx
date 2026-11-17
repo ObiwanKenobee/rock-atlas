@@ -89,6 +89,25 @@ export const CommandCentre: React.FC<CommandCentreProps> = ({
         </div>
       </div>
 
+      {/* Macroeconomic Reference Context */}
+      <div className="border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-5 py-3 flex flex-wrap items-center justify-between gap-4 text-xs">
+        <div className="flex flex-wrap items-center gap-4">
+          <span className="font-semibold text-slate-800 dark:text-slate-200">
+            Macroeconomic Context (Kenya):
+          </span>
+          <span className="font-mono tabular-nums text-slate-600 dark:text-slate-300">
+            Risk-Free Reference (CBK 91D T-Bill Assumption): 14.5%
+          </span>
+          <span aria-hidden="true" className="text-slate-300 dark:text-slate-700">|</span>
+          <span className="text-amber-700 dark:text-amber-400 font-mono">
+            CPI Inflation & KES/USD FX Time-Series: UNAVAILABLE DATA
+          </span>
+        </div>
+        <span className="text-[11px] text-slate-500">
+          Macro time-series require verified CBK/KNBS ingestion before factor regression.
+        </span>
+      </div>
+
       {/* Primary Focal Anchor: Composite Market Trajectory + Sector Comparison */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
         <div className="lg:col-span-8 border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-6">

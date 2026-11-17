@@ -152,24 +152,38 @@ export function analyzePortfolioRisk(
   const dates = Array.from(dateSet).sort();
   const portDailyRets: number[] = [];
   let equity = 100;
+  let benchEquity = 100;
   const equitySeries: number[] = [];
+  const chartEquitySeries: PortfolioRiskAnalysis['equitySeries'] = [];
 
   for (const d of dates) {
     let dayRet = 0;
     let wCovered = 0;
+    let benchSum = 0;
+    let benchCount = 0;
     for (const t of activeTickers) {
-      const w = weights[t];
-      if (w <= 0) continue;
       const r = retLookup.get(t)?.get(d);
       if (r !== undefined) {
-        dayRet += w * r;
-        wCovered += w;
+        benchSum += r;
+        benchCount++;
+        const w = weights[t];
+        if (w > 0) {
+          dayRet += w * r;
+          wCovered += w;
+        }
       }
     }
     const normalizedRet = wCovered > 0 ? dayRet / wCovered : 0;
+    const benchRet = benchCount > 0 ? benchSum / benchCount : 0;
     portDailyRets.push(normalizedRet);
     equity *= 1 + normalizedRet;
+    benchEquity *= 1 + benchRet;
     equitySeries.push(equity);
+    chartEquitySeries.push({
+      date: d,
+      portfolio: Number(equity.toFixed(2)),
+      benchmark: Number(benchEquity.toFixed(2)),
+    });
   }
 
   const cumRet = equity / 100 - 1;
@@ -239,6 +253,7 @@ export function analyzePortfolioRisk(
     diversificationRatio,
     herfindahlIndex,
     concentrationLabel,
+    equitySeries: chartEquitySeries,
     stressTests,
   };
 }
