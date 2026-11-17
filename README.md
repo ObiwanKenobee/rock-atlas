@@ -217,7 +217,7 @@ The structure represents the intended modular architecture. Directories and modu
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/rock-atlas.git
+git clone https://github.com/ObiwanKenobee/rock-atlas.git
 ```
 
 ### 2. Enter the Project Directory
