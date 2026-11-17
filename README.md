@@ -11,6 +11,8 @@ Our mission is to make African financial markets more understandable, accessible
 
 & [Bedrock](https://github.com/trevorblue/bedrock) — An open-source intelligence platform for analysing the Nairobi Securities Exchange (NSE), measuring market liquidity, detecting financial risks, forecasting potential stock crashes, and stress-testing foreign capital outflows.
 
+Both Combined: [BEDROCK ATLAS](https://silver-duny.dpages.app/)
+
 ---
 
 ## Vision
